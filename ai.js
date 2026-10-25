@@ -39,7 +39,7 @@ V.ai=function(){const p=aiProvider();
   h+=`<div class="card"><textarea id="aiq" rows="3" style="width:100%" placeholder="${m==='advise'?'やりたいこと・困っていること（例：お弁当を毎日作りたい）':'メッセージ'}"></textarea><div class="row"><button onclick="aiAsk()">${m==='advise'?'相談する':'送る'}</button></div></div>`}
  else h+=`<div class="row"><button onclick="aiAsk()">${{menu:'冷蔵庫から献立を提案してもらう',shop:'特売に合わせてリストを作る',money:'出費をまとめて助言をもらう',hacks:'買ったものの節約術を聞く'}[m]}</button></div>`;
  const r=AI.res;if(r&&r.kind===m)h+=aiView(r);return h};
-function badge(){return aiProvider()===MockProvider?'<span class="tag sampletag">見本</span>':''}
+function badge(){return IS_DEMO&&aiProvider()===MockProvider?'<span class="tag sampletag">見本</span>':''}
 function aiView(r){
  if(r.kind==='menu'){if(AI.lesson)return lessonView(r.recipe);
   return `<div class="card">${badge()}<b>${esc(r.title)}</b><ul>${r.plan.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><b>作り置き</b><ul>${r.prep.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
