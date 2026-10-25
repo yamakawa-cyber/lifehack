@@ -296,7 +296,7 @@ function restore(ev){const inp=ev.target,f=inp.files[0];if(!f)return;
 (function(){try{if(localStorage.getItem('lifehack_persist'))return;if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().then(ok=>{try{localStorage.setItem('lifehack_persist',ok?'granted':'denied:'+new Date().toISOString().slice(0,10))}catch(e){}}).catch(()=>{})}}catch(e){}})();
 
 // ---- ライフハック！だけ（port.py が付け足す）：費目予算の編集・利用規約・お買い物アプリ版バックアップの引っ越し ----
-const CONTACT='【要設定：お問い合わせ先（運営者名とメールアドレス）をここに入れる】';
+const CONTACT='安田商店（kci.amagasaki@gmail.com）';
 const CK='lifehack_cats',CAT_RATIO={'食材・米':.5,'おやつ・飲み物':.07,'惣菜':.05,'日用品':.13,'子ども':.05,'予備':.2};
 function catBud(){try{const o=JSON.parse(localStorage.getItem(CK)||'null');return isObj(o)?o:null}catch(e){return null}}
 function applyCats(){const o=catBud(),m=S.settings.monthly||100000;CATS.forEach(c=>{c[1]=o&&Number.isFinite(o[c[0]])?o[c[0]]:Math.round(m*(CAT_RATIO[c[0]]||.05)/100)*100})}
