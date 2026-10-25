@@ -1,14 +1,14 @@
 'use strict';
-// 「AIに相談」：ライフハック中継サーバー（Gemini）へ JSON をPOSTする。送信キーは localStorage の別キーだけに保存（バックアップに含めない）。
+// 「AIに相談」：受け取りURLへ JSON をPOSTする。送信キーは localStorage の別キーだけに保存（バックアップに含めない）。
 const SK='lifehack_secret';
-const CTYPES=[['menu','献立・作り置き'],['lesson','レシピレッスン'],['shop','買い物リスト'],['money','節約アドバイス'],['hacks','ライフハック'],['advise','やりたいこと相談'],['recipe','レシピ'],['receipt','レシート読み取り'],['chat','雑談']];
+const CTYPES=[['menu','献立・作り置き'],['lesson','レシピレッスン'],['shop','買い物リスト'],['money','節約アドバイス'],['hacks','ライフハック'],['advise','やりたいこと相談'],['recipe','レシピ'],['receipt','レシート読み取り'],['fridge','冷蔵庫の写真読み取り'],['chat','雑談']];
 const MAXBYTES=100000;
 const RELAY_URL='https://lifehack-relay.kci-amagasaki.workers.dev/';
 function secret(){let j={};try{j=JSON.parse(localStorage.getItem(SK)||'{}')||{}}catch(e){}return {url:RELAY_URL,key:isStr(j.key)?j.key:'',header:'X-App-Pass',left:Number.isFinite(j.left)?j.left:null}}
 function saveSecret(x){localStorage.setItem(SK,JSON.stringify(x))}
 function okConsultUrl(u){try{const x=new URL(u);if(x.protocol==='https:')return true;return x.protocol==='http:'&&/^(localhost|127\.0\.0\.1)$/.test(x.hostname)}catch(e){return false}} // 試験用にlocalhostのみhttp可
 function setConsult(field,v,el){const s=secret();v=String(v).trim();
- if(field==='url'&&0){if(v&&!okConsultUrl(v)){if(el)el.value=s.url;alert('受け取りURLは https:// で始まるものだけ使えます');return}s.url=v}
+ if(field==='url'){if(v&&!okConsultUrl(v)){if(el)el.value=s.url;alert('受け取りURLは https:// で始まるものだけ使えます');return}s.url=v}
  if(field==='key'){if(v.length>1000){if(el)el.value='';alert('キーが長すぎます');return}s.key=v}
  if(field==='header'){if(!/^[A-Za-z0-9-]{1,64}$/.test(v)){alert('ヘッダ名は英数字とハイフンだけです');return}s.header=v}
  saveSecret(s);render()}
@@ -33,7 +33,7 @@ function consultPanel(){const s=secret();
  <div class="row"><button onclick="toConfirm()" ${CON.sending?'disabled':''}>送る</button><button class="sub" onclick="CON.code=!CON.code;render()">取り込みコードを貼る</button></div>
  ${CON.code?`<textarea id="c_code" rows="4" style="width:100%" placeholder="取り込みコード（JSON）"></textarea><div class="row"><button class="sub" onclick="importCode()">取り込む</button></div>`:''}
  ${st()}<div class="muted">送る前に、送る内容を確認できます。</div>${pending().length&&relayBase()?`<div class="row"><button class="sub" onclick="fetchReplies(true)">📩 返事を確かめる（待ち${pending().length}件）</button></div>`:''}</div>`}
-function toConfirm(){let q=val('c_q');CON.type=val('c_type')||CON.type;if(!q&&RC.imgs.length)q=CON.type==='receipt'?'レシートの写真です。読み取って receipt の形で返してください。':'写真を見て相談にのってください。';if(!q){alert('相談したいことを書いてください');return}if(CON.type==='receipt'&&!RC.imgs.length){alert('レシートの写真を選んでください');return}if(CON.incType!==CON.type){CON.inc=CON.type==='receipt'?{fridge:false,list:false,spend:'off',memo:false}:{fridge:true,list:true,spend:'sum',memo:false};CON.incType=CON.type}CON.q=q;CON.stage='confirm';CON.status='';render()}
+function toConfirm(){let q=val('c_q');CON.type=val('c_type')||CON.type;if(!q&&RC.imgs.length)q=CON.type==='receipt'?'レシートの写真です。読み取って receipt の形で返してください。':CON.type==='fridge'?'冷蔵庫の写真です。中身を読み取って fridge の形で返してください。':'写真を見て相談にのってください。';if(!q){alert('相談したいことを書いてください');return}if(CON.type==='receipt'&&!RC.imgs.length){alert('レシートの写真を選んでください');return}if(CON.type==='fridge'&&!RC.imgs.length){alert('冷蔵庫の写真を選んでください');return}if(CON.incType!==CON.type){CON.inc=CON.type==='receipt'?{fridge:false,list:false,spend:'off',memo:false}:{fridge:true,list:true,spend:'sum',memo:false};CON.incType=CON.type}CON.q=q;CON.stage='confirm';CON.status='';render()}
 function setInc(k,v){CON.inc[k]=v;render()}
 function confirmPanel(){let pl;try{pl=consultPayload(CON.type,CON.q)}catch(e){pl=null;CON.status=e.message;CON.ok=false}
  const d=pl?JSON.parse(pl.body).data:{},i=CON.inc,cb=(k,l)=>`<label class="chk1"><input type="checkbox" ${i[k]?'checked':''} onchange="setInc('${k}',this.checked)"> ${l}</label>`;
@@ -51,12 +51,12 @@ function consultPayload(type,q){const mo=ymd(today()).slice(0,7),i=CON.inc;
  const strip=o=>{const x={...o};if(!i.memo)delete x.memo;return x};
  const month=S.spend.filter(r=>isObj(r)&&isStr(r.date)&&r.date.startsWith(mo)).sort((a,b)=>a.date.localeCompare(b.date));
  const data={settings:{region:S.settings.region,shopDays:S.settings.shopDays,perTrip:S.settings.perTrip,monthly:S.settings.monthly}};
- if(i.fridge)data.fridge=S.fridge.map(f=>({name:f.name,until:f.until||''}));
+ if(i.fridge)data.fridge=S.fridge.map(f=>{const x={name:f.name,until:f.until||'',zone:f.zone||'冷蔵室'};if(f.amt)x.amount=f.amt;return x});
  if(i.list)data.list=S.list.map(x=>strip({name:x.name,qty:x.qty,store:x.store,done:!!x.done,memo:x.memo}));
  if(i.spend!=='off'){const by={};month.forEach(r=>by[r.cat||'その他']=(by[r.cat||'その他']||0)+Number(r.amount||0));data.spendingByCat=by;data.spendingCount=month.length}
  if(i.spend==='detail')data.spending=month.map(r=>strip({date:r.date,store:r.store,cat:r.cat,amount:r.amount,memo:r.memo}));
  const p={app:'lifehack',id:CON.reqId||'',type,question:q,sentAt:new Date().toISOString(),data};
- if(CON.type==='receipt')data.categories=CATS.map(c=>c[0]);
+ if(CON.type==='receipt')data.categories=CATS.map(c=>c[0]);if(CON.type==='fridge')data.zones=['冷蔵室','チルド','ドアポケット','野菜室','冷凍室'];
  let body=JSON.stringify(p),dropped=0;const size=t=>new Blob([t]).size;
  while(size(body)>MAXBYTES&&p.data.spending&&p.data.spending.length){p.data.spending.shift();dropped++;p.data.spendingOmitted=dropped;body=JSON.stringify(p)}
  if(size(body)>MAXBYTES)throw new Error('送るデータが大きすぎます（冷蔵庫や買い物リストを減らすか、送るものを減らしてください）');
@@ -72,12 +72,12 @@ async function sendConsult(){const s=secret();if(IS_DEMO||CON.sending)return;if(
   const r=await fetch(s.url,{method:'POST',headers:h,body:pl.body,signal:ctl.signal});clearTimeout(tm);
   if(!r.ok){let m='';try{const jj=await r.json();if(jj&&typeof jj.message==='string')m=jj.message.slice(0,200)}catch(_){}if(r.status===402)setLeft(0);throw new Error(r.status===402?'回数を使い切りました（追加購入はお問い合わせください）':r.status===401?'合言葉がちがいます。設定で確かめてください。':r.status===429?(m||'混み合っています。少し待ってから送ってください。'):'AIのエラー（'+r.status+'）'+(m?'：'+m:''))}
   try{const jj=await r.clone().json();setLeft(jj.remaining)}catch(_){}
-  addPending(CON.reqId,CON.type);RC.imgs=[];CON.status='AIの返事が届きました！この画面の上の「📩 返事」から開けます。'+(secret().left!=null?'（のこり '+secret().left+'回）':'');fetchReplies(false)+(pl.dropped?`（古い家計記録${pl.dropped}件は省きました）`:'');CON.ok=true;CON.q='';CON.stage='form'}
+  addPending(CON.reqId,CON.type);RC.imgs=[];CON.status='AIの返事が届きました！この画面の上の「📩 返事」から開けます。'+(secret().left!=null?'（のこり '+secret().left+'回）':'');fetchReplies(false);CON.ok=true;CON.q='';CON.stage='form'}
  catch(e){CON.ok=false;CON.status=e.name==='AbortError'?'時間切れになりました。少しあとに「📩 返事を確かめる」を押してください。'
   :/Failed to fetch|NetworkError|Load failed/i.test(e.message)?'送れませんでした：サーバーにつながりませんでした。電波を確かめて、もう一度送ってください。':'送れませんでした：'+e.message}
  finally{CON.sending=false;render()}}
 function importCode(){const t=val('c_code');if(!t)return;try{let r;try{r=JSON.parse(t)}catch(e){throw new Error('JSONではありません')}checkAI(r);
- const hid=histAdd(r,'code');if(r.kind==='receipt'){CON.code=false;return rcImport([r])}AT.open=hid;AT.lesson=null;CON.code=false;CON.open=false;location.hash='#ai';render()}
+ const hid=histAdd(r,'code');if(r.kind==='receipt'||r.kind==='fridge'){CON.code=false;return rcImport([r])}AT.open=hid;AT.lesson=null;CON.code=false;CON.open=false;location.hash='#ai';render()}
  catch(e){CON.status='取り込めませんでした：'+e.message;CON.ok=false;render()}}
 {const f=V.home;V.home=function(){return areaSetupHtml()+f.apply(this,arguments)}}
 // 各タブに相談ボタンを差し込む
