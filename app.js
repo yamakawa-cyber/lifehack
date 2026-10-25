@@ -134,7 +134,7 @@ settings(){const st=S.settings;return `${IS_DEMO?'<div class="card sample">🧪 
  <p class="muted">データはこのスマホの中だけに保存されます。機種変更の前に書き出してください。</p>`}
 };
 function regName(){return (BASE.regions.find(r=>r.id===S.settings.region)||{}).name||''}
-function regionSeg(){return `<div class="seg wrap">${BASE.regions.map(r=>`<button class="${r.id===S.settings.region?'on':''}" data-act="region" data-id="${esc(r.id)}">${esc(r.name)}</button>`).join('')}</div>+`<div class="row"><button class="sub" onclick="addRegion()">＋ 自分の地域を追加</button></div>`}
+function regionSeg(){return `<div class="seg wrap">${BASE.regions.map(r=>`<button class="${r.id===S.settings.region?'on':''}" data-act="region" data-id="${esc(r.id)}">${esc(r.name)}</button>`).join('')}</div>`+`<div class="row"><button class="sub" onclick="addRegion()">＋ 自分の地域を追加</button></div>`}
 // ---- 地域（ライフハック！：利用者が自分の地域を追加できる）----
 const RK='lifehack_regions';
 function myRegions(){try{const a=JSON.parse(localStorage.getItem(RK)||'[]');return isArr(a)?a.filter(x=>isObj(x)&&isStr(x.id)&&/^u_[a-z0-9]{4,40}$/.test(x.id)&&isStr(x.name)&&x.name.length<=40):[]}catch(e){return []}}
