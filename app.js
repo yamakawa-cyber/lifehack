@@ -5,7 +5,7 @@ const IS_DEMO=new URLSearchParams(location.search).has('demo');
 const K=IS_DEMO?'lifehack_demo':'lifehack_v1'; // 見本は別キー（本データに保存しない）
 const CATS=[['食材・米',62000],['おやつ・飲み物',7000],['惣菜',3000],['日用品',13000],['子ども',5000],['予備',10000]];
 const OFTEN0=['玉子','牛乳','食パン','豆腐','納豆','玉ねぎ','にんじん','鶏むね肉','米','トイレットペーパー'];const OFTD=()=>OFTEN0.map(n=>({name:n,cat:n==='トイレットペーパー'?'日用品':'食材・米'}));const oft=()=>isArr(S.often)?S.often:OFTD();let OE=false;const mapU=(n,o)=>{const x=o||stores().find(z=>z.name===n)||{};const a=x.address||x.city||'';return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(n+(a&&!/不明/.test(a)?' '+a:''))};const mapA=(n,o)=>`<a class="maplink" href="${esc(mapU(n,o))}" target="_blank" rel="noopener"><b>📍${esc(n)}</b></a>`;
-const def={version:DATA_VERSION,settings:{shopDays:[1,4],fridgeDay:0,perTrip:9000,monthly:100000,region:'mukonoso',aiRelay:''},list:[],spend:[],fridge:[],menu:['','','','','','',''],prep:'',userStores:[]};
+const def={version:DATA_VERSION,settings:{shopDays:[1,4],fridgeDay:0,perTrip:9000,monthly:100000,region:'',aiRelay:''},list:[],spend:[],fridge:[],menu:['','','','','','',''],prep:'',userStores:[]};
 // ---- 検証 ----
 const isStr=v=>typeof v==='string',isArr=Array.isArray,isObj=v=>v&&typeof v==='object'&&!isArr(v);
 const isDate=v=>{if(!isStr(v)||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const [y,m,d]=v.split('-').map(Number);const x=new Date(Date.UTC(y,m-1,d));return x.getUTCFullYear()===y&&x.getUTCMonth()===m-1&&x.getUTCDate()===d};
@@ -39,7 +39,7 @@ function validate(data){if(!isObj(data))throw new Error('データの形が違�
  if('prep' in data){if(!okS(data.prep,5000))bad('prep');out.prep=data.prep}
  if('settings' in data){const st=data.settings;if(!isObj(st))bad('settings');
   if('shopDays' in st&&!(isArr(st.shopDays)&&st.shopDays.length>=1&&st.shopDays.every(okWd)))bad('settings（買い物の曜日）');
-  if('region' in st&&!(isStr(st.region)&&(!BASE.regions.length||BASE.regions.some(r=>r.id===st.region))))bad('settings（地域）');
+  if('region' in st&&!(isStr(st.region)&&(st.region===''||!BASE.regions.length||BASE.regions.some(r=>r.id===st.region))))bad('settings（地域）');
   for(const k of ['perTrip','monthly'])if(k in st&&!(okAmt(st[k])&&st[k]>0))bad('settings（予算）');
   if('aiRelay' in st&&!okS(st.aiRelay,500))bad('settings（AI）')}
  out.settings=cleanSettings(data.settings);
@@ -97,13 +97,13 @@ list(){const d=today(),tr=trips(d),cur=curTrip(d);const opts=regStores().map(s=>
  const form=`<div class="card"><div class="row"><input id="li_name" placeholder="品名（例：玉子）"><input id="li_qty" placeholder="数量" style="flex:0 0 80px"></div>
  <div class="row"><select id="li_store"><option value="">お店</option>${opts}</select><select id="li_trip">${tr.map(t=>`<option value="${t.wd}"${t.wd===cur.wd?' selected':''}>${t.label}</option>`).join('')}</select></div>
  <div class="row"><button onclick="addItem()">リストに追加</button></div>
- <div class="often">よく買う品：${oft().map((o,k)=>`<button class="chip" data-act="often" data-id="${k}">＋${esc(o.name)}</button>`).join('')}<button class="chip oedit" onclick="OE=!OE;render()">${OE?'✔ 編集おわり':'✏️ 編集'}</button></div>${OE?oftEditor():''}</div>`;
+ <div class="often">よく買う品：${oft().map((o,k)=>`<button class="chip" data-act="often" data-id="${k}">＋${esc(o.name)}</button>`).join('')}<button class="chip oedit" onclick="OE=!OE;render()">${OE?'✔ 編集おわり':'✏️ 編集'}</button></div>${typeof netBtn==='function'?`<div class="often">🔎 ネットで探す：${oft().map(o=>`<button class="chip" data-ns="${esc(o.name)}">${esc(o.name)}</button>`).join('')}</div>${NS&&NSF&&oft().some(o=>o.name===NS)?netMenu(NS,''):''}`:''}${OE?oftEditor():''}</div>`;
  const nc=S.list.filter(i=>i.cart&&!i.done).length;const cb=nc?`<div class="cartbar"><span>🛒 カゴの中 ${nc}品</span><button onclick="cartToBought()">カゴの中を「買った」にする</button></div>`:'';const clr=S.list.some(i=>i.done)?`<div class="row"><button class="sub" onclick="clearChecked()">✔ チェック済みをまとめて消す</button></div>`:'';if(lvNow()==='day')return seg+cb+clr+dayView()+form;
  const block=t=>{const g={};S.list.forEach((i,n)=>{if(tOf(i)!==t.wd)return;const k=i.store||'お店未定';const m=(g[k]=g[k]||{});const nk=baseName(i.name);(m[nk]=m[nk]||[]).push([i,n])});const keys=Object.keys(g);
   return `<h2>🗓 ${t.label}（${md(t.from)}の買い物）${t.wd===cur.wd?' <span class="tag">いまの回</span>':''}</h2>`+(keys.length?keys.map(st=>`<h3>🏪 ${st==='お店未定'?esc(st):mapA(st)}</h3><ul class="chk card">${Object.values(g[st]).map(rows=>{const ns=rows.map(r=>r[1]),i=rows[0][0],n=ns[0],done=rows.every(r=>r[0].done);
    const qty=rows.map(r=>r[0].qty||qtyOf(r[0].name)).filter(Boolean),nm=rows.length>1?baseName(i.name):i.name;
    const uses=[];rows.forEach(r=>(r[0].uses||[]).forEach(u=>{if(!uses.some(x=>x.d===u.d&&x.dish===u.dish))uses.push(u)}));
-   const inc=!done&&rows.every(r=>r[0].cart);return `<li class="${done?'done':inc?'incart':''}" data-del="${ns}">${done?'':cartBtn(ns,inc)}<label class="lrow"><input type="checkbox" ${done?'checked':''} data-tm="${ns}"><span style="flex:1">${esc(nm)}${qty.length?` <span class="muted">${esc(qty.join('＋'))}</span>`:''}${rows.length>1?` <span class="tag">${rows.length}件まとめ</span>`:''}${i.yen?` <span class="muted">${yen(i.yen)}・${esc(i.cat||'')}</span>`:''}</span></label>${done?'':`<input type="number" inputmode="numeric" id="yen${n}" placeholder="金額" style="width:80px"${i.price?` value="${i.price}"`:''}><select id="cat${n}" style="width:96px">${catOpts(i.cat||'食材・米')}</select>`}<button class="sub" data-act="del" data-id="${ns}" aria-label="消す">✕</button>${uses.length?`<div class="badges">${uses.sort((a,b)=>(a.d+6)%7-(b.d+6)%7).map(u=>`<button class="badge" data-act="jump" data-id="${u.d}">${WD[u.d]}${u.dish?'・'+esc(u.dish.slice(0,12)):''}</button>`).join('')}</div>`:''}</li>`}).join('')}</ul>`).join(''):'<div class="card muted empty"><img src="img/robo.svg" alt="" width="120">まだありません</div>')};
+   const inc=!done&&rows.every(r=>r[0].cart);return `<li class="${done?'done':inc?'incart':''}" data-del="${ns}">${done?'':cartBtn(ns,inc)}<label class="lrow"><input type="checkbox" ${done?'checked':''} data-tm="${ns}"><span style="flex:1">${esc(nm)}${qty.length?` <span class="muted">${esc(qty.join('＋'))}</span>`:''}${rows.length>1?` <span class="tag">${rows.length}件まとめ</span>`:''}${i.yen?` <span class="muted">${yen(i.yen)}・${esc(i.cat||'')}</span>`:''}</span></label>${done?'':`<input type="number" inputmode="numeric" id="yen${n}" placeholder="金額" style="width:80px"${i.price?` value="${i.price}"`:''}><select id="cat${n}" style="width:96px">${catOpts(i.cat||'食材・米')}</select>`}${done?'':netBtn(nm)}<button class="sub" data-act="del" data-id="${ns}" aria-label="消す">✕</button>${!done&&!NSF&&NS===baseName(nm)?netMenu(nm,qty.join('＋')):''}${uses.length?`<div class="badges">${uses.sort((a,b)=>(a.d+6)%7-(b.d+6)%7).map(u=>`<button class="badge" data-act="jump" data-id="${u.d}">${WD[u.d]}${u.dish?'・'+esc(u.dish.slice(0,12)):''}</button>`).join('')}</div>`:''}</li>`}).join('')}</ul>`).join(''):'<div class="card muted empty"><img src="img/robo.svg" alt="" width="120">まだありません</div>')};
  return seg+cb+form+`
  ${tr.map(block).join('')}
  <p class="muted">チェックするときに金額と費目を入れると、家計に「日付・店・費目・金額・メモ（品名）」で記録されます。✕で品物を消しても、家計の記録は残ります（家計タブで消せます）。</p>
@@ -128,23 +128,30 @@ settings(){const st=S.settings;return `${IS_DEMO?'<div class="card sample">🧪 
  <div class="row"><button class="sub" onclick="aiExport()">AIに頼む用に書き出す</button><label class="btnlike">AIの答えを読み込む<input type="file" accept=".json" hidden onchange="aiImport(event)"></label></div></div>
  <h2>バックアップ</h2><div class="card">${bkDue()?'<div class="tip">⚠️ 最後のバックアップから1週間たちました。書き出しておきましょう。</div>':''}<div class="muted">最後のバックアップ：${S.lastBackup?md(S.lastBackup):'まだ'}</div>
  <div class="row"><button onclick="backup()">全部を書き出す</button><label class="btnlike">読み込んで戻す<input type="file" accept=".json" hidden onchange="restore(event)"></label></div>
- <div class="muted">お店（追加した店）・買い物リスト・冷蔵庫・献立・家計・設定をまとめて1つのファイルにします。</div></div>
+ <div class="muted">お店（追加した店）・買い物リスト・冷蔵庫・献立・家計・設定に加えて、献立とレシピのつながり（リンク）とAIの答えの保管庫もまとめて1つのファイルにします。</div></div>
  <h2>見本データ</h2><div class="card"><button class="sub" onclick="clearSamples()">見本（サンプル）のデータをまとめて消す</button></div>
- <p class="muted">データはこのスマホの中だけに保存されます。機種変更の前に書き出してください。</p>`}
+ <p class="muted">買い物リストや家計などのデータは、このスマホの中に保存されます（AIに相談したときだけ、確認画面で選んだ内容が Google Gemini に送られます。<a class="link" href="#terms">利用規約・プライバシー</a>）。機種変更の前に書き出してください。</p>`}
 };
 function regName(){return (BASE.regions.find(r=>r.id===S.settings.region)||{}).name||''}
 function regionSeg(){return `<div class="seg wrap">${BASE.regions.map(r=>`<button class="${r.id===S.settings.region?'on':''}" data-act="region" data-id="${esc(r.id)}">${esc(r.name)}</button>`).join('')}</div>`+`<div class="row"><button class="sub" onclick="addRegion()">＋ 自分の地域を追加</button></div>`}
 // ---- 地域（ライフハック！：利用者が自分の地域を追加できる）----
 const RK='lifehack_regions';
 function myRegions(){try{const a=JSON.parse(localStorage.getItem(RK)||'[]');return isArr(a)?a.filter(x=>isObj(x)&&isStr(x.id)&&/^u_[a-z0-9]{4,40}$/.test(x.id)&&isStr(x.name)&&x.name.length<=40):[]}catch(e){return []}}
-function addRegion(nm){nm=String(nm==null?prompt('地域の名前（例：豊中、梅田、〇〇町）'):nm||'').trim().slice(0,40);if(!nm)return;let r=BASE.regions.find(x=>x.name===nm);
- if(!r){r={id:'u_'+uid().toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,20).padEnd(4,'0'),name:nm,user:true};const a=myRegions();a.push({id:r.id,name:nm});localStorage.setItem(RK,JSON.stringify(a));BASE.regions.push(r)}
- S.settings.region=r.id;localStorage.setItem('lifehack_area_done','1');save();render()}
-function pickArea(id){if(BASE.regions.some(r=>r.id===id)){S.settings.region=id;localStorage.setItem('lifehack_area_done','1');save();render()}}
-function areaSetupHtml(){if(IS_DEMO||localStorage.getItem('lifehack_area_done'))return '';
- return `<div class="card tip"><img src="img/robo.svg" alt="" width="64" style="float:right"><b>はじめに：お住まいの地域を選んでね</b><div class="muted">近くのお店の特売日やチラシを表示します。一覧にない地域は名前を入れて追加し、「お店」タブで行きつけのお店を登録してください。</div>
- <div class="seg wrap">${BASE.regions.filter(r=>!r.user).map(r=>`<button class="sub" onclick="pickArea('${esc(r.id)}')">${esc(r.name)}</button>`).join('')}</div>
- <div class="row"><input id="area_new" placeholder="ほかの地域（例：豊中）" style="flex:1"><button onclick="addRegion(val('area_new'))">この地域にする</button></div></div>`}
+function mkRegion(nm){let r=BASE.regions.find(x=>x.name===nm);
+ if(!r){r={id:'u_'+uid().toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,20).padEnd(4,'0'),name:nm,user:true};const a=myRegions();a.push({id:r.id,name:nm});localStorage.setItem(RK,JSON.stringify(a));BASE.regions.push(r)}return r}
+function addRegion(nm){nm=String(nm==null?prompt('地域の名前（例：豊中、梅田、〇〇町）'):nm||'').trim().slice(0,40);if(!nm)return;const r=mkRegion(nm);S.settings.region=r.id;save();render()}
+function pickArea(id){if(BASE.regions.some(r=>r.id===id)){S.settings.region=id;save();render()}}
+// はじめの設定：地域・買い物の曜日・予算（終わるまでホームの上に出る）
+function areaSetupHtml(){if(IS_DEMO||localStorage.getItem('lifehack_area_done'))return '';const st=S.settings;
+ return `<div class="card tip"><img src="img/robo.svg" alt="" width="64" style="float:right"><b>はじめに：3つだけ設定してね</b>
+ <div style="margin-top:6px"><b>① お住まいの地域</b><div class="muted">名前を入れて追加してください（「お店」タブで行きつけのお店を登録すると特売日が出ます）。</div></div>
+ ${BASE.regions.length?`<div class="seg wrap">${BASE.regions.map(r=>`<button class="${r.id===st.region?'on':'sub'}" onclick="pickArea('${esc(r.id)}')">${esc(r.name)}</button>`).join('')}</div>`:''}
+ <div class="row"><input id="area_new" placeholder="地域の名前（例：豊中）" style="flex:1"><button class="sub" onclick="addRegion(val('area_new'))">追加</button></div>
+ <div><b>② 買い物に行く曜日</b>（週2回が目安）</div><div class="seg">${WD.map((w,i)=>`<button class="${st.shopDays.includes(i)?'on':''}" onclick="togDay(${i})">${w}</button>`).join('')}</div>
+ <div><b>③ 予算</b></div><div class="row"><span>1回の買い物</span><input id="ob_trip" type="number" inputmode="numeric" value="${st.perTrip}" style="width:110px">円</div><div class="row"><span>月の予算</span><input id="ob_mon" type="number" inputmode="numeric" value="${st.monthly}" style="width:110px">円</div>
+ <div class="muted">あとから「設定」でいつでも変えられます。AIに相談したときは、相談の内容などが Google Gemini に送られます。<a class="link" href="#terms">利用規約・プライバシー</a></div>
+ <div class="row"><button onclick="obDone()">この内容ではじめる</button></div></div>`}
+function obDone(){const a=+val('ob_trip'),b=+val('ob_mon');if(okAmt(a)&&a>0)S.settings.perTrip=a;if(okAmt(b)&&b>0)S.settings.monthly=b;localStorage.setItem('lifehack_area_done','1');save();render();scrollTo(0,0)}
 const val=id=>{const e=document.getElementById(id);return e?e.value.trim():''};const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 function setRelay(v){v=v.trim();if(v&&!safeUrl(v))return alert('URLは http:// か https:// で始めてください');S.settings.aiRelay=v;save()}
 function addStore(){const n=val('ns_name');if(!n)return alert('店名を入れてください');const wd=val('ns_wd'),sl=val('ns_sale'),u=val('ns_url');
@@ -162,7 +169,7 @@ function togMany(ns,root){const its=ns.map(n=>S.list[n]).filter(Boolean);if(!its
  else its.forEach(i=>{i.done=false;if(i.spendId){const sid=i.spendId;S.spend=S.spend.filter(r=>r.id!==sid);delete i.spendId;delete i.yen;delete i.cat}});
  const y=scrollY;save();render();scrollTo(0,y)}
 const cartBtn=(ns,on)=>`<button class="cartb${on?' on':''}" data-cart="${ns}" aria-pressed="${on?'true':'false'}" aria-label="カゴに入れた">${on?'✅ カゴ':'🛒 カゴ'}</button>`;
-document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button[data-cart]');if(!b)return;e.preventDefault();const its=b.dataset.cart.split(',').map(Number).filter(Number.isInteger).map(n=>S.list[n]).filter(Boolean);if(!its.length)return;const on=!its.every(i=>i.cart);its.forEach(i=>{if(on)i.cart=true;else delete i.cart});const y=scrollY;save();render();scrollTo(0,y)});
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button[data-cart]');if(!b)return;e.preventDefault();const its=b.dataset.cart.split(',').map(Number).filter(Number.isInteger).map(n=>S.list[n]).filter(Boolean);if(!its.length)return;const n0=+b.dataset.cart.split(',')[0],ya=+val('yen'+n0);if(document.getElementById('yen'+n0)){if(okAmt(ya)&&ya>0){its[0].price=ya;its[0].cat=val('cat'+n0)||its[0].cat||'食材・米'}else if(val('yen'+n0)==='')delete its[0].price}const on=!its.every(i=>i.cart);its.forEach(i=>{if(on)i.cart=true;else delete i.cart});const y=scrollY;save();render();scrollTo(0,y)});
 function oftEditor(){const L=oft();return `<div class="oftbox"><b>よく買う品の編集</b><div class="muted">変えたらそのまま保存されます。↑↓で並べかえ。</div>${L.map((o,k)=>`<div class="oftrow" data-ok="${k}"><input data-of="name" value="${esc(o.name)}" placeholder="品名" aria-label="品名"><input data-of="qty" value="${esc(o.qty||'')}" placeholder="いつもの量" aria-label="いつもの量"><select data-of="cat" aria-label="費目">${catOpts(o.cat||'食材・米')}</select><input data-of="price" type="number" inputmode="numeric" value="${o.price||''}" placeholder="いつもの値段" aria-label="いつもの値段"><div class="oftbtn"><button class="sub" onclick="oftMove(${k},-1)" ${k?'':'disabled'} aria-label="上へ">↑</button><button class="sub" onclick="oftMove(${k},1)" ${k<L.length-1?'':'disabled'} aria-label="下へ">↓</button><button class="sub" onclick="oftDel(${k})" aria-label="消す">✕</button></div></div>`).join('')}
 <div class="oftrow"><input id="of_name" placeholder="新しい品名"><input id="of_qty" placeholder="いつもの量"><select id="of_cat">${catOpts('食材・米')}</select><input id="of_price" type="number" inputmode="numeric" placeholder="いつもの値段"><div class="oftbtn"><button onclick="oftAdd()">＋ 追加</button></div></div>
 <div class="row"><button class="sub" onclick="oftReset()">はじめの品ぞろえに戻す</button></div></div>`}
@@ -173,7 +180,10 @@ function oftDel(k){const L=oft().slice();const [g]=L.splice(k,1);if(!g)return;of
 function oftReset(){const prev=oft().slice();delete S.often;save();const y=scrollY;render();scrollTo(0,y);undo1('はじめの品ぞろえに戻しました',()=>oftSet(prev))}
 document.addEventListener('change',e=>{const f=e.target.dataset&&e.target.dataset.of;if(!f)return;const row=e.target.closest('[data-ok]');if(!row)return;const k=+row.dataset.ok;const L=oft().map(o=>Object.assign({},o));const o=L[k];if(!o)return;let v=e.target.value;
  if(f==='name'){v=v.trim().slice(0,100);if(!v){toast('品名は空にできません');return render()}o.name=v}else if(f==='price'){const p=+v;if(okAmt(p)&&p>0)o.price=p;else delete o.price}else{v=v.trim().slice(0,50);if(v)o[f]=v;else delete o[f]}S.often=L;save()});
-function cartToBought(){const its=S.list.filter(i=>i.cart&&!i.done);if(!its.length)return;its.forEach(i=>{i.done=true;delete i.cart});const y=scrollY;save();render();scrollTo(0,y);undo1(`カゴの中の${its.length}品を「買った」にしました`,()=>{its.forEach(i=>{i.done=false;i.cart=true});save();render()},its.length)}
+function cartToBought(){const its=S.list.filter(i=>i.cart&&!i.done);if(!its.length)return;
+ its.forEach((i,k)=>{const n=S.list.indexOf(i),v=+val('yen'+n);if(document.getElementById('yen'+n)&&okAmt(v)&&v>0){i.price=v;i.cat=val('cat'+n)||i.cat}});
+ const rec=[];its.forEach(i=>{i.done=true;delete i.cart;if(!i.spendId&&okAmt(+i.price)&&+i.price>0){i.yen=+i.price;i.cat=i.cat||'食材・米';i.spendId=uid();S.spend.push({id:i.spendId,date:ymd(today()),store:i.store||'',cat:i.cat,amount:i.yen,memo:i.name});rec.push(i)}});
+ const y=scrollY;save();render();scrollTo(0,y);undo1(`カゴの中の${its.length}品を「買った」にしました`+(rec.length?`（家計に${rec.length}件記録）`:''),()=>{its.forEach(i=>{i.done=false;i.cart=true});rec.forEach(i=>{const sid=i.spendId;S.spend=S.spend.filter(r=>r.id!==sid);delete i.spendId;delete i.yen});save();render()},its.length)}
 document.addEventListener('change',e=>{const c=e.target.closest&&e.target.closest('input[data-tm]');if(!c)return;togMany(c.dataset.tm.split(',').map(Number).filter(Number.isInteger),c.closest('li'))});
 function delMany(ns){const gone=ns.map(k=>[k,S.list[k]]).filter(x=>x[1]);if(!gone.length)return;S.list=S.list.filter((_,k)=>!ns.includes(k));save();render();
  undoToast(`「${gone[0][1].name.slice(0,14)}」${gone.length>1?`ほか${gone.length-1}件`:''}を消しました`,()=>{gone.sort((a,b)=>a[0]-b[0]).forEach(([k,i])=>S.list.splice(Math.min(k,S.list.length),0,i));save();render()},gone.length)}
@@ -257,8 +267,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
 function render(){const t=(location.hash||'#home').slice(1);const f=V[t]||V.home;$('#view').innerHTML=f();
  document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+t));if(render._t!==t){render._t=t;window.scrollTo(0,0)}}
 function demo(){const d=ymd(today()),w=curTrip(today()).wd;S=structuredClone(def);
- S.list=[{name:'玉子',store:'スーパーマルハチ 武庫之荘店',trip:w,done:false,sample:true},{name:'牛乳',store:'フレスコ 武庫之荘店',trip:w,done:true,sample:true},{name:'鶏むね肉',qty:'2枚',store:'',trip:w,done:false,sample:true},{name:'冷凍ブロッコリー',store:'業務スーパー 南武庫之荘店',trip:w,done:false,sample:true}];
- S.spend=[{id:'a',date:d,store:'KOHYO 武庫之荘店',cat:'食材・米',amount:5480,memo:'サンプル'},{id:'b',date:d,store:'ウエルシア 尼崎南武庫之荘店',cat:'日用品',amount:1260,memo:'サンプル'}];
+ S.list=[{name:'玉子',store:'スーパーマルハチ 駅前店',trip:w,done:false,sample:true},{name:'牛乳',store:'フレスコ 駅前店',trip:w,done:true,sample:true},{name:'鶏むね肉',qty:'2枚',store:'',trip:w,done:false,sample:true},{name:'冷凍ブロッコリー',store:'業務スーパー 南駅前店',trip:w,done:false,sample:true}];
+ S.spend=[{id:'a',date:d,store:'KOHYO 駅前店',cat:'食材・米',amount:5480,memo:'サンプル'},{id:'b',date:d,store:'ウエルシア 駅前店',cat:'日用品',amount:1260,memo:'サンプル'}];
  S.fridge=[{id:'c',name:'にんじん',until:d,sample:true},{id:'d',name:'豚こま',until:'',sample:true}];S.menu=['','豚の生姜焼き（サンプル）','カレー（サンプル）','','','',''];S.prep='きんぴら（日曜に作る・水曜まで）';S.sampleKeys=['prep'];save()}
 window.addEventListener('hashchange',render);
 Promise.all([fetch('data/regions.json').then(r=>r.json()),fetch('data/stores.json').then(r=>r.json())]).then(([r,s])=>{BASE={regions:r.regions.concat(myRegions()),stores:s.stores,source:s.source};if(!BASE.regions.some(x=>x.id===S.settings.region))S.settings.region=def.settings.region;
@@ -268,13 +278,13 @@ async function aiDemo(q){AI.mode=q.get('ai');if(AI.mode==='chat'||AI.mode==='adv
  await aiAsk();AT.open='demo';render();if(q.has('lesson')){startLesson();goStep(+q.get('lesson')-1)}}
 function menuArr(){if(isArr(S.menu)&&S.menu.length===7)return S.menu;const a=['','','','','','',''];String(S.menu||'').split('\n').forEach(l=>{const m=l.match(/^([日月火水木金土])[：:](.*)$/);if(m)a[WD.indexOf(m[1])]=m[2].trim()});return a}
 function setMenu(w,v){const a=menuArr().slice();a[w]=v;S.menu=a;save()}
-function bkDue(){return !S.lastBackup||(today()-new Date(S.lastBackup+'T12:00'))>7*864e5}
+function bkDue(){return !!S.lastBackup&&(today()-new Date(S.lastBackup+'T12:00'))>7*864e5}
 function backup(){S.lastBackup=ymd(today());save();const data={app:'lifehack',version:DATA_VERSION,exported:new Date().toISOString(),data:S,links:getLinks(),hist:(typeof hist==='function'?hist():[])};
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download='おかいもの_バックアップ_'+ymd(today())+'.json';a.click();render()}
 function restore(ev){const inp=ev.target,f=inp.files[0];if(!f)return;
  if(f.size>4e6){alert('読めませんでした（いまのデータはそのままです）：ファイルが大きすぎます（4MBまで）');inp.value='';return}
  f.text().then(t=>{if(new Blob([t]).size>4e6)throw new Error('ファイルが大きすぎます（4MBまで）');let j;try{j=JSON.parse(t)}catch(e){throw new Error('JSONではありません')}
-  if(!isObj(j)||j.app!=='lifehack'||!isObj(j.data))throw new Error('このアプリのバックアップではありません');
+  if(!isObj(j)||!(j.app==='lifehack'||j.app===AKIRA_APP)||!isObj(j.data))throw new Error('このアプリ（またはお買い物アプリ版）のバックアップではありません');if(j.app===AKIRA_APP)fromAkira(j);
   if(!Number.isInteger(j.version)||j.version<1||j.version>DATA_VERSION)throw new Error(j.version===undefined?'版（version）が書かれていないため読めません':'対応していない版です（version '+String(j.version).slice(0,20)+'）');
   const nd=validate(j.data); // ここで失敗すれば、いまのデータはそのまま
   if(!confirm('いまのデータを、バックアップの内容で置き換えます。よろしいですか？'))return;const txt=JSON.stringify(nd);if(new Blob([txt]).size>4e6)throw new Error('データが大きすぎます（4MBまで）');try{localStorage.setItem(K,txt)}catch(e){throw new Error('スマホの保存領域に入りきりませんでした')}S=nd;
@@ -284,3 +294,26 @@ function restore(ev){const inp=ev.target,f=inp.files[0];if(!f)return;
  .catch(e=>alert('読めませんでした（いまのデータはそのままです）：'+e.message)).finally(()=>{inp.value=''})}
 // 初回起動で、データを消されにくくする（ブラウザが空き容量不足のときに自動削除しない）
 (function(){try{if(localStorage.getItem('lifehack_persist'))return;if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().then(ok=>{try{localStorage.setItem('lifehack_persist',ok?'granted':'denied:'+new Date().toISOString().slice(0,10))}catch(e){}}).catch(()=>{})}}catch(e){}})();
+
+// ---- ライフハック！だけ（port.py が付け足す）：費目予算の編集・利用規約・お買い物アプリ版バックアップの引っ越し ----
+const CONTACT='【要設定：お問い合わせ先（運営者名とメールアドレス）をここに入れる】';
+const CK='lifehack_cats',CAT_RATIO={'食材・米':.5,'おやつ・飲み物':.07,'惣菜':.05,'日用品':.13,'子ども':.05,'予備':.2};
+function catBud(){try{const o=JSON.parse(localStorage.getItem(CK)||'null');return isObj(o)?o:null}catch(e){return null}}
+function applyCats(){const o=catBud(),m=S.settings.monthly||100000;CATS.forEach(c=>{c[1]=o&&Number.isFinite(o[c[0]])?o[c[0]]:Math.round(m*(CAT_RATIO[c[0]]||.05)/100)*100})}
+function setCat(k,v){const o=catBud()||{};v=String(v).trim();const n=+v;if(v!==''&&okAmt(n)&&n>=0)o[k]=n;else delete o[k];localStorage.setItem(CK,JSON.stringify(o));applyCats();render()}
+function catEditHtml(){applyCats();const o=catBud()||{};return `<h2>費目ごとの月の予算</h2><div class="card">${CATS.map(([k,b])=>`<div class="crow"><span>${esc(k)}</span><span><input type="number" inputmode="numeric" value="${Number.isFinite(o[k])?o[k]:''}" placeholder="${b}" style="width:110px" onchange="setCat('${esc(k)}',this.value)"> 円</span></div>`).join('')}<div class="muted">空のままだと、月の予算から自動で割り当てます（いまの目安を薄い字で表示）。</div></div>`}
+function termsHtml(){return `<h2>利用規約・プライバシー</h2><div class="card terms">
+ <p><b>運営者・お問い合わせ</b><br>${esc(CONTACT)}</p>
+ <p><b>データの保存場所</b><br>買い物リスト・家計・冷蔵庫・献立・お店などは、このスマホのブラウザの中に保存されます。運営者がこれらを集めることはありません。消えないよう、ときどき「設定 → バックアップ」で書き出してください。</p>
+ <p><b>AIに相談したときに送られるもの</b><br>「AIに相談」で送ると、相談の文章と、送る前の確認画面で選んだデータ（冷蔵庫の中身、買い物リスト、家計の集計や明細、レシートや冷蔵庫の写真、地域・買い物日・予算の設定）が、中継サーバー（Cloudflare）を通って <b>Google の Gemini API</b> に送られ、AIが答えを作ります。送った内容は Google の利用規約・プライバシーポリシーに従って扱われます。中継サーバーは、AIの返事を受け取るまで（最長7日）保管し、受け取ったら消します。合言葉・使った回数・最後に使った日時は中継サーバーに記録します。写真に住所・氏名・カード番号など個人を特定できるものが写らないようにしてください。</p>
+ <p><b>料金（使い切り方式）</b><br>合言葉ごとに、AIに相談できる回数が決まっています（標準100回）。1回送るごとに1回へり、AIの返事を作れなかったときは数えません。使い切ったら、お問い合わせ先から回数を追加購入できます。料金や回数は変わることがあります。AIを使わない機能（買い物リスト・家計・冷蔵庫など）は無料です。</p>
+ <p><b>免責</b><br>AIの答え（献立・レシピ・節約・値段・健康に関わる内容など）は参考情報で、正しさや最新であることは保証できません。アレルギー・健康・お金に関わる判断は、ご自身で確かめてください。ネット通販や出前のリンク先での購入・支払いは、各サービスとの取引になります。サービスは予告なく変更・停止することがあります。運営者の故意または重大な過失による場合を除き、このアプリの利用で生じた損害の責任は負いかねます。</p>
+ <div class="muted">2026-10-25 版</div></div>`}
+V.terms=function(){return `<div class="row"><a class="link" href="#settings">← 設定にもどる</a></div>`+termsHtml()};
+{const f=V.money;V.money=function(){applyCats();return f.apply(this,arguments)}}
+{const f=V.settings;V.settings=function(){applyCats();return f.apply(this,arguments).replace('<h2>バックアップ</h2>',catEditHtml()+'<h2>バックアップ</h2>')+`<div class="row"><a class="link" href="#terms">📄 利用規約・プライバシー（AIに送るデータ・料金・免責・お問い合わせ）</a></div>`}}
+// お買い物アプリ版のバックアップを読み込めるように：地域の番号をこのアプリの地域に置きかえる
+const AKIRA_APP='oka'+'imono',AREA_NAMES={mukonoso:'武庫之荘',amagasaki:'尼崎',nishinomiya:'西宮',itami:'伊丹'};
+function fromAkira(j){const d=j.data,ids=new Set();if(isObj(d.settings)&&isStr(d.settings.region))ids.add(d.settings.region);(isArr(d.userStores)?d.userStores:[]).forEach(s=>{if(isObj(s)&&isStr(s.region))ids.add(s.region)});
+ const map={};ids.forEach(id=>{if(!id||BASE.regions.some(r=>r.id===id))return;map[id]=mkRegion(String(AREA_NAMES[id]||id).slice(0,40)).id});
+ if(isObj(d.settings)&&map[d.settings.region])d.settings.region=map[d.settings.region];(isArr(d.userStores)?d.userStores:[]).forEach(s=>{if(isObj(s)&&map[s.region])s.region=map[s.region]});localStorage.setItem('lifehack_area_done','1')}

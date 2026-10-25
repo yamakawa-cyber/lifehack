@@ -15,7 +15,7 @@ function setConsult(field,v,el){const s=secret();v=String(v).trim();
 const mask=k=>k?'●'.repeat(Math.min(8,k.length))+k.slice(-4):'未設定';
 function consultSettingsHtml(){const s=secret();return `<h2>AIに相談（合言葉）</h2><div class="card">
  合言葉（いま：${esc(mask(s.key))}）<input id="c_key" type="password" autocomplete="off" placeholder="もらった合言葉を入れる" style="width:100%" onchange="setConsult('key',this.value,this)">
- ${s.left!=null?`<div>のこりの相談回数：<b>${s.left}回</b></div>`:''}<div class="muted">合言葉はこのスマホの中だけに保存し、バックアップには入れません。</div>
+ ${s.left!=null?`<div>のこりの相談回数：<b>${s.left}回</b></div>`:''}<div class="muted">合言葉はこのスマホに保存し（相談のときだけ中継サーバーへ送って確かめます）、バックアップには入れません。</div>
  <div class="row"><button class="sub" onclick="checkLeft()">のこり回数を確かめる</button><button class="sub" onclick="if(confirm('合言葉を消しますか？')){localStorage.removeItem(SK);render()}">消す</button></div></div>`}
 function setLeft(n){const s=secret();if(Number.isFinite(n)){s.left=n;saveSecret(s)}}
 async function checkLeft(){const s=secret();if(!s.key)return alert('合言葉を入れてください');try{const r=await fetch(RELAY_URL+'me',{headers:{'X-App-Pass':s.key}});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||('エラー '+r.status));setLeft(j.remaining);render()}catch(e){alert('確かめられませんでした：'+e.message)}}
@@ -33,7 +33,7 @@ function consultPanel(){const s=secret();
  <div class="row"><button onclick="toConfirm()" ${CON.sending?'disabled':''}>送る</button><button class="sub" onclick="CON.code=!CON.code;render()">取り込みコードを貼る</button></div>
  ${CON.code?`<textarea id="c_code" rows="4" style="width:100%" placeholder="取り込みコード（JSON）"></textarea><div class="row"><button class="sub" onclick="importCode()">取り込む</button></div>`:''}
  ${st()}<div class="muted">送る前に、送る内容を確認できます。</div>${pending().length&&relayBase()?`<div class="row"><button class="sub" onclick="fetchReplies(true)">📩 返事を確かめる（待ち${pending().length}件）</button></div>`:''}</div>`}
-function toConfirm(){let q=val('c_q');CON.type=val('c_type')||CON.type;if(!q&&RC.imgs.length)q=CON.type==='receipt'?'レシートの写真です。読み取って receipt の形で返してください。':CON.type==='fridge'?'冷蔵庫の写真です。中身を読み取って fridge の形で返してください。':'写真を見て相談にのってください。';if(!q){alert('相談したいことを書いてください');return}if(CON.type==='receipt'&&!RC.imgs.length){alert('レシートの写真を選んでください');return}if(CON.type==='fridge'&&!RC.imgs.length){alert('冷蔵庫の写真を選んでください');return}if(CON.incType!==CON.type){CON.inc=CON.type==='receipt'?{fridge:false,list:false,spend:'off',memo:false}:{fridge:true,list:true,spend:'sum',memo:false};CON.incType=CON.type}CON.q=q;CON.stage='confirm';CON.status='';render()}
+function toConfirm(){let q=val('c_q');CON.type=val('c_type')||CON.type;if(!q&&RC.imgs.length)q=CON.type==='receipt'?'レシートの写真です。読み取って receipt の形で返してください。':CON.type==='fridge'?'冷蔵庫の写真です。中身を読み取って fridge の形で返してください。':'写真を見て相談にのってください。';if(!q){alert('相談したいことを書いてください');return}if(CON.type==='receipt'&&!RC.imgs.length){alert('レシートの写真を選んでください');return}if(CON.type==='fridge'&&!RC.imgs.length){alert('冷蔵庫の写真を選んでください');return}if(CON.incType!==CON.type){CON.inc=CON.type==='receipt'?{fridge:false,list:false,spend:'off',memo:false}:{fridge:true,list:true,spend:'sum',memo:false};CON.incType=CON.type}if(!['compare','order'].includes(CON.type))CON.extra=null;CON.q=q;CON.stage='confirm';CON.status='';render()}
 function setInc(k,v){CON.inc[k]=v;render()}
 function confirmPanel(){let pl;try{pl=consultPayload(CON.type,CON.q)}catch(e){pl=null;CON.status=e.message;CON.ok=false}
  const d=pl?JSON.parse(pl.body).data:{},i=CON.inc,cb=(k,l)=>`<label class="chk1"><input type="checkbox" ${i[k]?'checked':''} onchange="setInc('${k}',this.checked)"> ${l}</label>`;
@@ -55,6 +55,7 @@ function consultPayload(type,q){const mo=ymd(today()).slice(0,7),i=CON.inc;
  if(i.list)data.list=S.list.map(x=>strip({name:x.name,qty:x.qty,store:x.store,done:!!x.done,memo:x.memo}));
  if(i.spend!=='off'){const by={};month.forEach(r=>by[r.cat||'その他']=(by[r.cat||'その他']||0)+Number(r.amount||0));data.spendingByCat=by;data.spendingCount=month.length}
  if(i.spend==='detail')data.spending=month.map(r=>strip({date:r.date,store:r.store,cat:r.cat,amount:r.amount,memo:r.memo}));
+ if(isObj(CON.extra)&&(CON.type==='compare'||CON.type==='order'))Object.assign(data,CON.extra);
  const p={app:'lifehack',id:CON.reqId||'',type,question:q,sentAt:new Date().toISOString(),data};
  if(CON.type==='receipt')data.categories=CATS.map(c=>c[0]);if(CON.type==='fridge')data.zones=['冷蔵室','チルド','ドアポケット','野菜室','冷凍室'];
  let body=JSON.stringify(p),dropped=0;const size=t=>new Blob([t]).size;
@@ -72,7 +73,7 @@ async function sendConsult(){const s=secret();if(IS_DEMO||CON.sending)return;if(
   const r=await fetch(s.url,{method:'POST',headers:h,body:pl.body,signal:ctl.signal});clearTimeout(tm);
   if(!r.ok){let m='';try{const jj=await r.json();if(jj&&typeof jj.message==='string')m=jj.message.slice(0,200)}catch(_){}if(r.status===402)setLeft(0);throw new Error(r.status===402?'回数を使い切りました（追加購入はお問い合わせください）':r.status===401?'合言葉がちがいます。設定で確かめてください。':r.status===429?(m||'混み合っています。少し待ってから送ってください。'):'AIのエラー（'+r.status+'）'+(m?'：'+m:''))}
   try{const jj=await r.clone().json();setLeft(jj.remaining)}catch(_){}
-  addPending(CON.reqId,CON.type);RC.imgs=[];CON.status='AIの返事が届きました！この画面の上の「📩 返事」から開けます。'+(secret().left!=null?'（のこり '+secret().left+'回）':'');fetchReplies(false);CON.ok=true;CON.q='';CON.stage='form'}
+  addPending(CON.reqId,CON.type);if(typeof onSent==='function')onSent(CON.type,CON.extra);CON.extra=null;RC.imgs=[];CON.status='AIの返事が届きました！この画面の上の「📩 返事」から開けます。'+(secret().left!=null?'（のこり '+secret().left+'回）':'');fetchReplies(false);CON.ok=true;CON.q='';CON.stage='form'}
  catch(e){CON.ok=false;CON.status=e.name==='AbortError'?'時間切れになりました。少しあとに「📩 返事を確かめる」を押してください。'
   :/Failed to fetch|NetworkError|Load failed/i.test(e.message)?'送れませんでした：サーバーにつながりませんでした。電波を確かめて、もう一度送ってください。':'送れませんでした：'+e.message}
  finally{CON.sending=false;render()}}
