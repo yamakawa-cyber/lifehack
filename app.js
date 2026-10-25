@@ -128,7 +128,7 @@ settings(){const st=S.settings;return `${IS_DEMO?'<div class="card sample">🧪 
  <div class="row"><button class="sub" onclick="aiExport()">AIに頼む用に書き出す</button><label class="btnlike">AIの答えを読み込む<input type="file" accept=".json" hidden onchange="aiImport(event)"></label></div></div>
  <h2>バックアップ</h2><div class="card">${bkDue()?'<div class="tip">⚠️ 最後のバックアップから1週間たちました。書き出しておきましょう。</div>':''}<div class="muted">最後のバックアップ：${S.lastBackup?md(S.lastBackup):'まだ'}</div>
  <div class="row"><button onclick="backup()">全部を書き出す</button><label class="btnlike">読み込んで戻す<input type="file" accept=".json" hidden onchange="restore(event)"></label></div>
- <div class="muted">お店（追加した店）・買い物リスト・冷蔵庫・献立・家計・設定に加えて、献立とレシピのつながり（リンク）とAIの答えの保管庫もまとめて1つのファイルにします。</div></div>
+ <div class="muted">お店（追加した店）・買い物リスト・冷蔵庫・献立・家計・設定に加えて、献立とレシピのつながり（リンク）・AIの答えの保管庫・注文の一覧もまとめて1つのファイルにします。</div></div>
  <h2>見本データ</h2><div class="card"><button class="sub" onclick="clearSamples()">見本（サンプル）のデータをまとめて消す</button></div>
  <p class="muted">買い物リストや家計などのデータは、このスマホの中に保存されます（AIに相談したときだけ、確認画面で選んだ内容が Google Gemini に送られます。<a class="link" href="#terms">利用規約・プライバシー</a>）。機種変更の前に書き出してください。</p>`}
 };
@@ -279,15 +279,18 @@ async function aiDemo(q){AI.mode=q.get('ai');if(AI.mode==='chat'||AI.mode==='adv
 function menuArr(){if(isArr(S.menu)&&S.menu.length===7)return S.menu;const a=['','','','','','',''];String(S.menu||'').split('\n').forEach(l=>{const m=l.match(/^([日月火水木金土])[：:](.*)$/);if(m)a[WD.indexOf(m[1])]=m[2].trim()});return a}
 function setMenu(w,v){const a=menuArr().slice();a[w]=v;S.menu=a;save()}
 function bkDue(){return !!S.lastBackup&&(today()-new Date(S.lastBackup+'T12:00'))>7*864e5}
-function backup(){S.lastBackup=ymd(today());save();const data={app:'lifehack',version:DATA_VERSION,exported:new Date().toISOString(),data:S,links:getLinks(),hist:(typeof hist==='function'?hist():[])};
+const BKX={}; // ほかのファイルが {get,set,pre} を登録（注文の一覧など）。pre は検証の前に戻す
+function backup(){S.lastBackup=ymd(today());save();const extra={};Object.entries(BKX).forEach(([k,x])=>{try{extra[k]=x.get()}catch(e){}});const data={app:'lifehack',version:DATA_VERSION,exported:new Date().toISOString(),data:S,links:getLinks(),hist:(typeof hist==='function'?hist():[]),extra};
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download='おかいもの_バックアップ_'+ymd(today())+'.json';a.click();render()}
 function restore(ev){const inp=ev.target,f=inp.files[0];if(!f)return;
  if(f.size>4e6){alert('読めませんでした（いまのデータはそのままです）：ファイルが大きすぎます（4MBまで）');inp.value='';return}
  f.text().then(t=>{if(new Blob([t]).size>4e6)throw new Error('ファイルが大きすぎます（4MBまで）');let j;try{j=JSON.parse(t)}catch(e){throw new Error('JSONではありません')}
   if(!isObj(j)||!(j.app==='lifehack'||j.app===AKIRA_APP)||!isObj(j.data))throw new Error('このアプリ（またはお買い物アプリ版）のバックアップではありません');if(j.app===AKIRA_APP)fromAkira(j);
   if(!Number.isInteger(j.version)||j.version<1||j.version>DATA_VERSION)throw new Error(j.version===undefined?'版（version）が書かれていないため読めません':'対応していない版です（version '+String(j.version).slice(0,20)+'）');
+  const ex=isObj(j.extra)?j.extra:{};Object.entries(BKX).forEach(([k,x])=>{if(x.pre&&k in ex)try{x.set(ex[k])}catch(e){}});
   const nd=validate(j.data); // ここで失敗すれば、いまのデータはそのまま
   if(!confirm('いまのデータを、バックアップの内容で置き換えます。よろしいですか？'))return;const txt=JSON.stringify(nd);if(new Blob([txt]).size>4e6)throw new Error('データが大きすぎます（4MBまで）');try{localStorage.setItem(K,txt)}catch(e){throw new Error('スマホの保存領域に入りきりませんでした')}S=nd;
+  Object.entries(BKX).forEach(([k,x])=>{if(!x.pre&&k in ex)try{x.set(ex[k])}catch(e){}});
   if(isObj(j.links)){const L={};Object.entries(j.links).forEach(([k,v])=>{if(isStr(k)&&isStr(v)&&k.length<200&&v.length<400)L[k]=v});try{localStorage.setItem(LK,JSON.stringify(L))}catch(e){}}
   if(isArr(j.hist)&&typeof saveHist==='function'){const cur=hist(),ids=new Set(cur.map(e=>e.id));saveHist(cur.concat(j.hist.filter(e=>isObj(e)&&isStr(e.id)&&isObj(e.item)&&AISHAPE[e.item.kind]&&!ids.has(e.id))))}
   alert('戻しました');render()})
@@ -317,3 +320,7 @@ const AKIRA_APP='oka'+'imono',AREA_NAMES={mukonoso:'武庫之荘',amagasaki:'尼
 function fromAkira(j){const d=j.data,ids=new Set();if(isObj(d.settings)&&isStr(d.settings.region))ids.add(d.settings.region);(isArr(d.userStores)?d.userStores:[]).forEach(s=>{if(isObj(s)&&isStr(s.region))ids.add(s.region)});
  const map={};ids.forEach(id=>{if(!id||BASE.regions.some(r=>r.id===id))return;map[id]=mkRegion(String(AREA_NAMES[id]||id).slice(0,40)).id});
  if(isObj(d.settings)&&map[d.settings.region])d.settings.region=map[d.settings.region];(isArr(d.userStores)?d.userStores:[]).forEach(s=>{if(isObj(s)&&map[s.region])s.region=map[s.region]});localStorage.setItem('lifehack_area_done','1')}
+// バックアップに入れる：自分で追加した地域（検証の前に戻す）・費目ごとの予算・はじめの設定ずみ
+BKX.regions={pre:true,get:()=>myRegions(),set:v=>{if(!isArr(v))return;v.filter(x=>isObj(x)&&isStr(x.id)&&/^u_[a-z0-9]{4,40}$/.test(x.id)&&isStr(x.name)&&x.name.length<=40).forEach(x=>{if(BASE.regions.some(r=>r.id===x.id))return;const a=myRegions();a.push({id:x.id,name:x.name});localStorage.setItem(RK,JSON.stringify(a));BASE.regions.push({id:x.id,name:x.name,user:true})})}};
+BKX.cats={get:()=>catBud(),set:v=>{if(v===null){localStorage.removeItem(CK);return}if(!isObj(v))return;const o={};CATS.forEach(([k])=>{if(Number.isFinite(v[k])&&v[k]>=0&&v[k]<1e8)o[k]=v[k]});localStorage.setItem(CK,JSON.stringify(o))}};
+BKX.areaDone={get:()=>!!localStorage.getItem('lifehack_area_done'),set:v=>{if(v===true)localStorage.setItem('lifehack_area_done','1')}};
