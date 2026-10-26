@@ -5,7 +5,7 @@ const CTYPES=[['menu','献立・作り置き'],['lesson','レシピレッスン'
 const MAXBYTES=100000;
 const RELAY_URL='https://lifehack-relay.kci-amagasaki.workers.dev/';
 function secret(){let j={};try{j=JSON.parse(localStorage.getItem(SK)||'{}')||{}}catch(e){}return {url:RELAY_URL,key:isStr(j.key)?j.key:'',header:'X-App-Pass',left:Number.isFinite(j.left)?j.left:null}}
-function saveSecret(x){localStorage.setItem(SK,JSON.stringify(x))}
+function saveSecret(x){setLS(SK,JSON.stringify(x))}
 function okConsultUrl(u){try{const x=new URL(u);if(x.protocol==='https:')return true;return x.protocol==='http:'&&/^(localhost|127\.0\.0\.1)$/.test(x.hostname)}catch(e){return false}} // 試験用にlocalhostのみhttp可
 function setConsult(field,v,el){const s=secret();v=String(v).trim();
  if(field==='url'){if(v&&!okConsultUrl(v)){if(el)el.value=s.url;alert('受け取りURLは https:// で始まるものだけ使えます');return}s.url=v}
@@ -14,7 +14,7 @@ function setConsult(field,v,el){const s=secret();v=String(v).trim();
  saveSecret(s);render()}
 const mask=k=>k?'●'.repeat(Math.min(8,k.length))+k.slice(-4):'未設定';
 function consultSettingsHtml(){const s=secret();return `<h2>AIに相談（合言葉）</h2><div class="card">
- 合言葉（いま：${esc(mask(s.key))}）<input id="c_key" type="password" autocomplete="off" placeholder="もらった合言葉を入れる" style="width:100%" onchange="setConsult('key',this.value,this)">
+ 合言葉（いま：${esc(mask(s.key))}）<input id="c_key" aria-label="合言葉" type="password" autocomplete="off" placeholder="もらった合言葉を入れる" style="width:100%" onchange="setConsult('key',this.value,this)">
  ${s.left!=null?`<div>のこりの相談回数：<b>${s.left}回</b></div>`:''}<div class="muted">合言葉はこのスマホに保存し（相談のときだけ中継サーバーへ送って確かめます）、バックアップには入れません。</div>
  <div class="row"><button class="sub" onclick="checkLeft()">のこり回数を確かめる</button><button class="sub" onclick="if(confirm('合言葉を消しますか？')){localStorage.removeItem(SK);render()}">消す</button></div></div>`}
 function setLeft(n){const s=secret();if(Number.isFinite(n)){s.left=n;saveSecret(s)}}
@@ -27,8 +27,8 @@ function consultPanel(){const s=secret();
  if(IS_DEMO)return `<div class="card sample">🧪 見本モードでは相談を送りません。</div>`;
  if(!s.key)return `<div class="card tip">合言葉がまだ入っていません。<a class="link" href="#settings">設定で「合言葉」を入れる →</a></div>`;
  if(CON.stage==='confirm')return confirmPanel();
- return `<div class="card consultbox"><select id="c_type">${CTYPES.map(([k,l])=>`<option value="${k}"${k===CON.type?' selected':''}>${l}</option>`).join('')}</select>
- <textarea id="c_q" rows="3" style="width:100%" placeholder="相談したいこと">${esc(CON.q||'')}</textarea>
+ return `<div class="card consultbox"><select id="c_type" aria-label="相談の種類">${CTYPES.map(([k,l])=>`<option value="${k}"${k===CON.type?' selected':''}>${l}</option>`).join('')}</select>
+ <textarea id="c_q" rows="3" maxlength="4000" aria-label="相談したいこと" style="width:100%" placeholder="相談したいこと">${esc(CON.q||'')}</textarea>
  ${rcPickHtml()}
  <div class="row"><button onclick="toConfirm()" ${CON.sending?'disabled':''}>送る</button><button class="sub" onclick="CON.code=!CON.code;render()">取り込みコードを貼る</button></div>
  ${CON.code?`<textarea id="c_code" rows="4" style="width:100%" placeholder="取り込みコード（JSON）"></textarea><div class="row"><button class="sub" onclick="importCode()">取り込む</button></div>`:''}
@@ -40,7 +40,7 @@ function confirmPanel(){let pl;try{pl=consultPayload(CON.type,CON.q)}catch(e){pl
  const d=pl?JSON.parse(pl.body).data:{},i=CON.inc,cb=(k,l)=>`<label class="chk1"><input type="checkbox" ${i[k]?'checked':''} onchange="setInc('${k}',this.checked)"> ${l}</label>`;
  const ex=(a,f)=>a&&a.length?a.slice(0,3).map(f).map(esc).join('、')+(a.length>3?' ほか':''):'なし';
  return `<div class="card consultbox"><b>送る内容の確認</b>
- <div class="muted">種類：${esc((CTYPES.find(x=>x[0]===CON.type)||[])[1]||'')}${CON.type==='compare'&&isObj(CON.extra)&&CON.extra.compare&&CON.extra.compare.area?'／地域：'+esc(CON.extra.compare.area):''}</div><label class="muted" for="c_qe">送るメッセージ（テンプレのまま送っても、書き足しても、全部書きかえてもOK）</label><textarea id="c_qe" class="qedit" rows="4" style="width:100%" oninput="CON.q=this.value">${esc(CON.q)}</textarea>${CON.type==='order'&&typeof payNote==='function'?payNote():''}${RC.imgs.length?`<div>📷 写真 ${RC.imgs.length}枚</div>${rcThumbs(false)}`:''}
+ <div class="muted">種類：${esc((CTYPES.find(x=>x[0]===CON.type)||[])[1]||'')}${CON.type==='compare'&&isObj(CON.extra)&&CON.extra.compare&&CON.extra.compare.area?'／地域：'+esc(CON.extra.compare.area):''}</div><label class="muted" for="c_qe">送るメッセージ（テンプレのまま送っても、書き足しても、全部書きかえてもOK）</label><textarea id="c_qe" class="qedit" rows="4" maxlength="4000" style="width:100%" oninput="CON.q=this.value">${esc(CON.q)}</textarea>${CON.type==='order'&&typeof payNote==='function'?payNote():''}${RC.imgs.length?`<div>📷 写真 ${RC.imgs.length}枚</div>${rcThumbs(false)}`:''}
  ${cb('fridge',`冷蔵庫（${i.fridge?S.fridge.length+'件':'送らない'}）`)}<div class="muted">見本：${(i.fridge?ex(d.fridge,f=>f.name):'送らない')}</div>
  ${cb('list',`買い物リスト（${i.list?S.list.length+'件':'送らない'}）`)}<div class="muted">見本：${(i.list?ex(d.list,x=>x.name):'送らない')}</div>
  <div>家計（今月${i.spend==='off'?'・送らない':i.spend==='sum'?'・'+(d.spendingCount||0)+'件を集計':'・'+((d.spending||[]).length)+'件'}）：<select onchange="setInc('spend',this.value)">${[['sum','費目別の集計だけ'],['detail','明細も送る'],['off','送らない']].map(([k,l])=>`<option value="${k}"${i.spend===k?' selected':''}>${l}</option>`).join('')}</select></div>
@@ -67,15 +67,17 @@ function consultPayload(type,q){const mo=ymd(today()).slice(0,7),i=CON.inc;
 async function sendConsult(){const s=secret();if(IS_DEMO||CON.sending)return;keepQ();CON.q=String(CON.q||'').trim().slice(0,4000);if(!CON.q){CON.status='送るメッセージを書いてください';CON.ok=false;return render()}if(!s.url||!s.key){CON.status='送信先が未設定です';CON.ok=false;return render()}
  if(!CTYPES.some(([k])=>k===CON.type)||!CON.q)return;
  if(!navigator.onLine){CON.status='いまオフラインなので送れません。電波のあるところで、もう一度送ってください。';CON.ok=false;return render()}
- CON.reqId='c'+uid();let pl;try{pl=consultPayload(CON.type,CON.q)}catch(e){CON.status=e.message;CON.ok=false;return render()}
+ // 時間切れ・504のあとは同じ番号で送り直す（受け取り側で同じ相談とわかるように）
+ CON.reqId=(CON.retry&&CON.retry.q===CON.q&&CON.retry.type===CON.type)?CON.retry.id:'c'+uid();let pl;try{pl=consultPayload(CON.type,CON.q)}catch(e){CON.status=e.message;CON.ok=false;return render()}
  const h={'Content-Type':'application/json'};h[s.header]=s.header==='Authorization'?'Bearer '+s.key:s.key;
  CON.sending=true;CON.status='AIが考えています…（30秒ほどかかることがあります）';CON.ok=true;render();
  try{const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),RC.imgs.length?90000:60000);
   const r=await fetch(s.url,{method:'POST',headers:h,body:pl.body,signal:ctl.signal});clearTimeout(tm);
+  if(r.status===504||r.status===409){addPending(CON.reqId,CON.type);CON.retry={id:CON.reqId,q:CON.q,type:CON.type};const e=new Error('maybe');e.maybe=true;throw e}
   if(!r.ok){let m='';try{const jj=await r.json();if(jj&&typeof jj.message==='string')m=jj.message.slice(0,200)}catch(_){}if(r.status===402)setLeft(0);throw new Error(r.status===402?'回数を使い切りました（追加購入はお問い合わせください）':r.status===401?'合言葉がちがいます。設定で確かめてください。':r.status===429?(m||'混み合っています。少し待ってから送ってください。'):'AIのエラー（'+r.status+'）'+(m?'：'+m:''))}
   try{const jj=await r.clone().json();setLeft(jj.remaining)}catch(_){}
-  addPending(CON.reqId,CON.type);if(typeof onSent==='function')onSent(CON.type,CON.extra);CON.extra=null;RC.imgs=[];CON.status='AIの返事が届きました！この画面の上の「📩 返事」から開けます。'+(secret().left!=null?'（のこり '+secret().left+'回）':'');fetchReplies(false);CON.ok=true;CON.q='';CON.stage='form'}
- catch(e){CON.ok=false;CON.status=e.name==='AbortError'?'時間切れになりました。少しあとに「📩 返事を確かめる」を押してください。'
+  CON.retry=null;addPending(CON.reqId,CON.type);if(typeof onSent==='function')onSent(CON.type,CON.extra);CON.extra=null;RC.imgs=[];CON.status='AIの返事が届きました！この画面の上の「📩 返事」から開けます。'+(secret().left!=null?'（のこり '+secret().left+'回）':'');fetchReplies(false);CON.ok=true;CON.q='';CON.stage='form'}
+ catch(e){CON.ok=false;if(e.name==='AbortError'){addPending(CON.reqId,CON.type);CON.retry={id:CON.reqId,q:CON.q,type:CON.type}}CON.status=e.maybe?'届いたか確認中です（番号 '+CON.reqId+'）。受け取り側の応答が遅れました。返事が届けば、この画面の上に「📩 返事」が出ます。送り直すときは同じ番号で送ります。':e.name==='AbortError'?'時間切れになりました。少しあとに「📩 返事を確かめる」を押してください。'
   :/Failed to fetch|NetworkError|Load failed/i.test(e.message)?'送れませんでした：サーバーにつながりませんでした。電波を確かめて、もう一度送ってください。':'送れませんでした：'+e.message}
  finally{CON.sending=false;render()}}
 function importCode(){const t=val('c_code');if(!t)return;try{let r;try{r=JSON.parse(t)}catch(e){throw new Error('JSONではありません')}checkAI(r);
